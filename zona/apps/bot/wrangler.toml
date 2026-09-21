@@ -1,0 +1,9 @@
+name = "zona-bot"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Секрет BOT_TOKEN задать командой:
+#   wrangler secret put BOT_TOKEN
+
+[vars]
+WEBAPP_URL = "https://zona-web.pages.dev"
