@@ -12,8 +12,8 @@ import {
 import type { Character, MoveReward, Rank } from "@zona/core";
 import { getTelegram } from "./telegram.js";
 
-const CHAR_KEY = "zona:character";
-const ACTIVE_KEY = "zona:active_move";
+const CHAR_KEY = "zona:character:v1";
+const ACTIVE_KEY = "zona:active_move:v1";
 
 export interface SkillState {
   level: number;
@@ -73,25 +73,97 @@ type StoredMove = {
   finishesAt: number;
 };
 
+function uuid(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore, fall back
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore quota / private mode errors
+  }
+}
+
+function safeRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function isValidCharacter(value: unknown): value is Character {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  if (typeof obj.id !== "string") return false;
+  if (typeof obj.nickname !== "string") return false;
+  if (typeof obj.authority !== "number") return false;
+  if (typeof obj.chips !== "number") return false;
+  if (typeof obj.energy !== "number") return false;
+  if (typeof obj.energyMax !== "number") return false;
+  if (typeof obj.lastEnergyAt !== "number") return false;
+  if (!obj.skills || typeof obj.skills !== "object") return false;
+  const skills = obj.skills as Record<string, unknown>;
+  for (const key of ["strength", "cunning", "charisma", "tech"]) {
+    const skill = skills[key];
+    if (!skill || typeof skill !== "object") return false;
+    const s = skill as Record<string, unknown>;
+    if (typeof s.level !== "number" || typeof s.xp !== "number") return false;
+  }
+  return true;
+}
+
 function loadCharacter(): Character | null {
-  const raw = localStorage.getItem(CHAR_KEY);
+  const raw = safeGet(CHAR_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Character;
+    const parsed: unknown = JSON.parse(raw);
+    if (isValidCharacter(parsed)) return parsed;
+    return null;
   } catch {
     return null;
   }
 }
 
 function saveCharacter(c: Character): void {
-  localStorage.setItem(CHAR_KEY, JSON.stringify(c));
+  safeSet(CHAR_KEY, JSON.stringify(c));
 }
 
 function loadActive(): StoredMove | null {
-  const raw = localStorage.getItem(ACTIVE_KEY);
+  const raw = safeGet(ACTIVE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as StoredMove;
+    const parsed = JSON.parse(raw) as StoredMove;
+    if (
+      typeof parsed.id === "string" &&
+      typeof parsed.characterId === "string" &&
+      typeof parsed.moveKey === "string" &&
+      typeof parsed.startedAt === "number" &&
+      typeof parsed.finishesAt === "number"
+    ) {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -99,21 +171,21 @@ function loadActive(): StoredMove | null {
 
 function saveActive(m: StoredMove | null): void {
   if (m === null) {
-    localStorage.removeItem(ACTIVE_KEY);
+    safeRemove(ACTIVE_KEY);
   } else {
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify(m));
+    safeSet(ACTIVE_KEY, JSON.stringify(m));
   }
 }
 
 function createInitialCharacter(): Character {
   const tg = getTelegram();
-  const user = tg?.initDataUnsafe.user;
+  const user = tg?.initDataUnsafe?.user;
   const nickname = user?.first_name ?? user?.username ?? "Заключённый";
   const now = Date.now();
   const energyMax = defaultEnergyMax();
 
   const character: Character = {
-    id: crypto.randomUUID(),
+    id: uuid(),
     userId: user ? String(user.id) : "local",
     nickname,
     authority: 0,
@@ -136,7 +208,9 @@ function createInitialCharacter(): Character {
 }
 
 function getOrCreateCharacter(): Character {
-  return loadCharacter() ?? createInitialCharacter();
+  const existing = loadCharacter();
+  if (existing) return existing;
+  return createInitialCharacter();
 }
 
 function withRegen(c: Character): Character {
@@ -205,7 +279,7 @@ export const api = {
     if (!check.ok) throw new Error(check.reason);
 
     const now = Date.now();
-    const active = createActiveMove(crypto.randomUUID(), character, move, now);
+    const active = createActiveMove(uuid(), character, move, now);
 
     const updated: Character = {
       ...character,
