@@ -1,5 +1,7 @@
 name = "tyraga"
 compatibility_date = "2024-09-23"
+workers_dev = true
+preview_urls = false
 
 [assets]
 directory = "./apps/web/dist"
