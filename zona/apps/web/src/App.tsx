@@ -1,16 +1,10 @@
 import { useState } from "react";
 import { CharacterScreen } from "./screens/CharacterScreen.js";
-import { BrigadeScreen } from "./screens/BrigadeScreen.js";
 import { MovesScreen } from "./screens/MovesScreen.js";
 import { useCharacter } from "./hooks/useCharacter.js";
-import {
-  IconHammer,
-  IconLogo,
-  IconPerson,
-  IconUsers
-} from "./icons.js";
+import { IconHammer, IconLogo, IconPerson } from "./icons.js";
 
-type Tab = "character" | "moves" | "brigade";
+type Tab = "character" | "moves";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("character");
@@ -42,12 +36,6 @@ export function App() {
         >
           <IconHammer /> Движухи
         </button>
-        <button
-          className={`tab ${tab === "brigade" ? "active" : ""}`}
-          onClick={() => setTab("brigade")}
-        >
-          <IconUsers /> Бригада
-        </button>
       </nav>
 
       {loading && (
@@ -65,10 +53,6 @@ export function App() {
 
       {!loading && !error && tab === "moves" && (
         <MovesScreen onCharacterChange={setCharacter} />
-      )}
-
-      {!loading && !error && tab === "brigade" && (
-        <BrigadeScreen character={character} onCharacterChange={setCharacter} />
       )}
     </div>
   );
